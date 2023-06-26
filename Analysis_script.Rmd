@@ -1,0 +1,2013 @@
+---
+title: "Analysis script Solidaridad"
+output: html_document
+date: "2023-06-07"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **ACTING NOW FOR FOOD SECURITY AND RESILIENT FOOD SYSTEMS:** Analysis template
+
+This template provides you with an analysis plan for the data collected
+in the baseline study of the Acting Now project. It follows the same
+structure as the report template, containing the structure to calculate
+indicators, visualise them, and conduct statistical tests. The chapters
+have the same number as in the reporting template, so you can easily
+navigate through this template.
+
+Visuals are tailored to Solidaridad branding, but can be changed
+according to the context.
+
+## Preparation
+
+Install needed packages
+
+```{r}
+#you can skip this if you have already installed the packages
+#install.packages("readxl")
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("leaflet")
+#install.packages("tidyr")
+```
+
+Load the necessary datasets.There are 2 datasets: the main dataset (1st
+sheet) and the data from a repeated question group on crop assessments
+(2nd sheet)
+
+```{r}
+library(readxl)
+# We load the necessary datasets. In this temple we used a sample dataset. Please replace the title by the title of your own dataset from Kobo. The first sheet is the main dataset
+acting_now_mft <- read_excel("Acting_Now_-_Measurement_Framework_Tool_-XML Headers.xlsx", sheet = "Acting Now - Measurement Fra...")
+```
+
+```{r}
+# We also load the second dataset: the second sheet with the crop assessment per commodity
+crop_assessment <- read_excel("Acting_Now_-_Measurement_Framework_Tool_-XML Headers.xlsx", 
+    sheet = "crop_assessment_per_commodity")
+```
+
+You can run the view() function to check whether the data upload went
+well.
+
+```{r}
+View(acting_now_mft)
+```
+
+```{r}
+View(crop_assessment)
+```
+
+Prepare the colours of Solidaridad
+
+```{r}
+yellow <- "#FFCC00"
+light_grey <- "#F0EDE8"
+grey <- "#D9D9C3"
+red <- "#FF0500"
+black <- "#000000"
+```
+
+## 4. **Introduction to our sample**
+
+### 4a Farmer characteristics
+
+#### Age
+
+```{r}
+#quick summqry 
+summary(acting_now_mft$age_of_farmer)
+```
+
+```{r}
+#Visualise with a boxplot to understand the distribution
+boxplot(acting_now_mft$age_of_farmer,
+        ylab="Age of farmer",
+        main="Boxplot of farmers by age",
+        col=red,
+        las=1,
+        cex.lab=1.2,
+        sub="Data: acting now measurement framework"
+        #notch=TRUE
+)
+
+#Address any outliers, e.g. farmers with an age above 100 or below 16.
+
+```
+
+```{r}
+# visualise in a histogram using ggplot, this is a graph you can choose to include in your report.
+# Adapt the "binwidth" when you want to make the bins larger or smaller! 
+
+library(ggplot2)
+library(dplyr)
+
+ggplot(acting_now_mft %>% filter(!is.na(age_of_farmer)), 
+       aes(x = age_of_farmer, fill = after_stat(count))) +
+  geom_histogram(binwidth = 5, color = "white", fill = yellow) +
+  labs(x = "Age of farmer",
+       y = "Frequency",
+       title = "Age distribution of farmers",
+       subtitle = "Data: acting now measurement framework") +
+  theme_minimal() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.subtitle = element_text(color = "black", size = 12),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 10),
+        legend.title = element_blank(),
+        legend.position = "none")
+
+```
+
+We will define youth and non-youth groups for dissaggregation later on.
+In this chunck of code, we use 35 years old as a cut-off point. This can
+be changed according to your project's defintion of the cut-off age for
+non-youth.
+
+```{r}
+library(dplyr)
+acting_now_mft <- acting_now_mft %>%
+  mutate(age_group = ifelse(age_of_farmer <= 35, "Youth", "Non-youth"))
+```
+
+#### Sex
+
+```{r}
+#Sex of the farmer: number of male, female and other?
+table(acting_now_mft$sex_of_respondent)
+
+```
+
+```{r}
+# Compute the proportions
+prop_sex_farmer <- prop.table(table(acting_now_mft$sex_of_respondent))
+
+# Create a data frame for the pie chart
+pie_data <- data.frame(category = names(prop_sex_farmer),
+                      prop = prop_sex_farmer,
+                      label = paste(names(prop_sex_farmer), "\n", round(prop_sex_farmer * 100, 2), "%"))
+
+# Define the colors
+colors <- c(grey, yellow)
+
+# Create the pie chart using ggplot
+ggplot(pie_data, aes(x = factor(1), y = prop_sex_farmer, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = colors) +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Sex",
+       title = "Distribution of sex of farmers")+
+       #subtitle  = "Data: acting now measurement framework") +
+  theme_void() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.caption = element_text(color = "black", size = 10),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(title = "Sex")) +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            color = "black",
+            size = 3)
+```
+
+#### Relationship with head of household
+
+```{r}
+#table
+table(acting_now_mft$household_head_relationship)
+```
+
+```{r}
+library(ggplot2)
+library(stringr)
+
+# Change the labels
+# Replace underscores with spaces, capitalize the first letter of each word
+acting_now_mft$household_head_relationship <- str_replace_all(acting_now_mft$household_head_relationship, "_", " ")
+acting_now_mft$household_head_relationship <- str_to_sentence(acting_now_mft$household_head_relationship)
+
+# Compute the proportions
+prop_relationship_headh <- prop.table(table(acting_now_mft$household_head_relationship))
+decimal <- 3
+
+# Round the proportions
+prop_relationship_headh_rounded <- round(prop_relationship_headh * 100, decimal)
+
+# Create a data frame for the bar chart
+bar_data <- data.frame(category = names(prop_relationship_headh),
+                       prop = prop_relationship_headh,
+                       label = paste(round(prop_relationship_headh_rounded, 2), "%"))
+
+# Create the bar chart using ggplot
+library(scales)
+
+# Multiply the proportion variable by 100
+ggplot(bar_data, aes(x = category, y = prop_relationship_headh, fill = category)) +
+  geom_bar(stat = "identity", fill = yellow) +
+  labs(x = "Relationship",
+       y = "Share of farmers (%)",
+       fill = "Relationship",
+       title = "Farmer's relationship with the head of household",
+       subtitle = "Data: acting now measurement framework") +
+  theme_minimal() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.subtitle = element_text(color = "black", size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+ geom_text(aes(label = paste0(round(prop_relationship_headh * 100), "%")),
+            vjust = -0.5,
+            color = "black",
+            size = 3) +
+  scale_y_continuous(labels = scales::percent, limits=c(0,1))
+
+
+
+
+```
+
+#### Literacy level of the respondent (education level)
+
+```{r}
+#TABLE: number of farmers in each literacy level 
+as.data.frame(table(acting_now_mft$education_level))
+
+# In case you are interested, you can make a similar graph as the one for relationship with the head of the household.
+```
+
+```{r}
+library(ggplot2)
+# Change the labels
+# Replace underscores with spaces, capitalize the first letter of each word
+acting_now_mft$education_level <- str_replace_all(acting_now_mft$education_level, "__", " ")
+acting_now_mft$education_level <- str_replace_all(acting_now_mft$education_level, "_", " ")
+acting_now_mft$education_level <- str_to_sentence(acting_now_mft$education_level)
+
+# Define the colors
+colors <- c("grey", yellow)
+
+# Create the bar chart using ggplot
+# Create the bar chart using ggplot
+
+acting_now_mft_filtered <- acting_now_mft %>% filter(!is.na(education_level))
+count_data <- acting_now_mft_filtered %>%
+  count(education_level, sex_of_respondent, name = "count")
+
+ggplot(count_data) +
+  aes(x = education_level, y = count, fill = sex_of_respondent) +
+  geom_bar(position = "dodge", stat = "identity", width = 0.7) +
+  geom_text(
+    aes(label = count),
+    position = position_dodge(width = 0.7),
+    vjust = -0.5,
+    color = "black",
+    size = 3
+  ) +
+  scale_fill_manual(values = colors) +
+  labs(
+    x = "Education Level",
+    y = "Frequency",
+    title = "Farmer Education Level",
+    subtitle = "Disaggregated by Gender",
+    fill = "Gender"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(color = "black", size = 14, face = "bold"),
+    plot.caption = element_text(color = "black", size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+```
+
+#### Access to mobile phone and access to internet
+
+Access to mobile phone
+
+```{r}
+table(acting_now_mft$mobile_phone_access)
+```
+
+```{r}
+# Compute the proportions
+prop_phone_access <- prop.table(table(acting_now_mft$mobile_phone_access))
+
+# Create a data frame for the pie chart
+pie_data <- data.frame(category = names(prop_phone_access),
+                      prop = prop_phone_access,
+                      label = paste(names(prop_phone_access), "\n", round(prop_phone_access * 100, 2), "%"))
+
+# Define the colors
+colors <- c("grey", yellow)
+
+# Create the pie chart using ggplot
+ggplot(pie_data, aes(x = factor(1), y = prop_phone_access, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = colors) +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Access to mobile phone",
+       title = "Farmers having access to phone",
+       subtitle  = "Data: acting now measurement framework") +
+  theme_void() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.caption = element_text(color = "black", size = 10),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(title = "Access to phone")) +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            color = "black",
+            size = 3)
+```
+
+Access to internet
+
+```{r}
+table(acting_now_mft$mobile_internet_access)
+```
+
+```{r}
+# Compute the proportions
+prop_internet_access <- prop.table(table(acting_now_mft$mobile_internet_access))
+
+# Create a data frame for the pie chart
+pie_data <- data.frame(category = names(prop_internet_access),
+                      prop = prop_internet_access,
+                      label = paste(names(prop_internet_access), "\n", round(prop_internet_access * 100, 2), "%"))
+
+# Define the colors
+colors <- c("grey", yellow)
+
+# Create the pie chart using ggplot
+ggplot(pie_data, aes(x = factor(1), y = prop_internet_access, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = colors) +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Access to mobile internet",
+       title = "Farmers having access to internet",
+       subtitle  = "Data: acting now measurement framework") +
+  theme_void() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.caption = element_text(color = "black", size = 10),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(title = "Access to internet")) +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            color = "black",
+            size = 3)
+```
+
+### 4b Household characteristics
+
+#### Household size
+
+```{r}
+#Household size
+summary(acting_now_mft$total_household_number)
+
+#Visualise with a boxplot
+boxplot(acting_now_mft$total_household_number,
+        ylab="Total members",
+        main="Boxplot of total members that live in the household",
+        col=yellow,
+        las=1,
+        cex.lab=1.2,
+        sub="Data: acting now measurement framework"
+)
+
+#histogram
+ggplot(acting_now_mft, aes(x = total_household_number)) +
+  geom_histogram(binwidth = 1, fill = yellow, color = 'white') +
+  labs(
+    x = "Nr. of household members",
+    y = "Frequency",
+    title = "Distribution of Household Sizes",
+    subtitle = "Data: Acting Now Measurement Framework"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(color = "black", size = 14, face = "bold"),
+    plot.caption = element_text(color = "black", size = 10)
+  )
+
+```
+
+#### Decision making
+
+```{r}
+#Decision making
+table(acting_now_mft$investments_decision_maker)
+#Rename labels
+acting_now_mft$investments_decision_maker <- recode(acting_now_mft$investments_decision_maker, "another_household_member" = "another household member", "both_me_and_my_partner_spouse" = "both me and my partner/spouse", "partner_spouse"="partner/spouse")
+```
+
+```{r}
+# Create the bar chart using ggplot
+ggplot(acting_now_mft %>% filter(!is.na(investments_decision_maker))) +
+  geom_bar(
+    aes(x = investments_decision_maker),
+    fill = yellow,
+    width = 0.7
+  ) +
+  geom_text(
+    aes(
+      x = investments_decision_maker,
+      label = ..count..
+    ),
+    stat = "count",
+    vjust = -0.5,
+    size = 3
+  ) +
+  labs(
+    x = "\n Relationship with Head of Household",
+    y = "Frequency",
+    title = "Number of Farmers by Relationship with Head of Household"
+  ) +
+  scale_x_discrete(
+    labels = function(x) str_wrap(x, width = 10)
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(color = "black", size = 14, face = "bold"),
+    plot.caption = element_text(color = "black", size = 10),
+   axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5, lineheight = 0.8)
+  )
+```
+
+### 4c Farm characteristics
+
+#### Location
+
+```{r}
+#Location: map showing location of farmers 
+library(leaflet)
+
+# Convert longitude and latitude columns to numeric
+acting_now_mft$`_farm_geo_location_longitude` <- as.numeric(acting_now_mft$`_farm_geo_location_longitude`)
+acting_now_mft$`_farm_geo_location_latitude` <- as.numeric(acting_now_mft$`_farm_geo_location_latitude`)
+
+# Create a leaflet map
+map <- leaflet(data = acting_now_mft) %>%
+  addTiles()  # Add default tile layer
+
+# Set the view to a specific location and zoom level
+#map <- map %>%
+  #setView(lng = mean(acting_now_mft$`_farm_geo_location_longitude`),
+          #lat = mean(acting_now_mft$`_farm_geo_location_latitude`),
+          #zoom = 12)  # Adjust the zoom level as per your preference
+
+# Add markers for each farmer's geolocation
+map <- map %>%
+  addMarkers(
+    lng = acting_now_mft$`_farm_geo_location_longitude`,
+    lat = acting_now_mft$`_farm_geo_location_latitude`,
+    popup =paste("Farmer name"=acting_now_mft$farmer_name,
+                 "District"=acting_now_mft$district,
+                 "Village"=acting_now_mft$village)
+  )
+
+# Display the map
+map
+
+```
+
+#### Type of land holding
+
+```{r}
+table(acting_now_mft$land_ownership)
+
+# Compute the proportions
+prop_land_holding <- prop.table(table(acting_now_mft$land_ownership))
+
+# Create a data frame for the bar graph
+bar_data <- data.frame(prop = prop_land_holding)
+
+# Rename the column names
+colnames(bar_data) <- c("category", "prop")
+
+ggplot(bar_data, aes(x = category, y = prop, fill = category)) +
+  geom_bar(stat = "identity", width = 0.7, color = "white", fill = yellow) +
+  geom_text(aes(label = paste(round(prop * 100, 2), "%")), vjust = -0.5, color = "black", size = 3) +
+  labs(x = "Land Holding",
+       y = "Share of Farmers (%)",
+       title = "Land Holding Distribution",
+       subtitle = "Data: Acting Now Measurement Framework") +
+  theme_minimal() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.caption = element_text(color = "black", size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = scales::percent, limits=c(0,1))
+
+```
+
+#### Size of the land under cultivation
+
+B.4 What is the total size of the land under cultivation in the last 12
+months? Necessary to convert into the same unit (hectares)!
+
+```{r}
+#What is the total size of the land under cultivation in the last 12 months?
+land_size_hectares <- numeric(length(acting_now_mft$land_size_under_cultivation))  # Create an empty vector to store results
+
+## 
+for (i in 1:length(acting_now_mft$land_size_under_cultivation)) {
+  if (is.na(acting_now_mft$unit_of_measure_of_land[i])) {
+    land_size_hectares[i] <- NA  # Managing missing values
+  } else if (acting_now_mft$unit_of_measure_of_land[i] == "Acres") {
+    land_size_hectares[i] <- acting_now_mft$land_size_under_cultivation[i] * 0.404686  # Converting acres into hectares
+  } else {
+    land_size_hectares[i] <- acting_now_mft$land_size_under_cultivation[i]  # Values in hectares remain unchanged
+  }
+}
+
+# Add the transformed farm size variable to the dataset
+acting_now_mft$land_size_hectares <- land_size_hectares
+```
+
+Now use the variable land_size_hectares for your calculations
+
+```{r}
+#quick summary
+summary(land_size_hectares)
+```
+
+@Warning: need to check data quality. there are outliers
+
+```{r}
+#Visualise with a boxplot
+boxplot(acting_now_mft$land_size_hectares,
+        ylab="Land size in hectares",
+        main="Boxplot of land size under cultivation",
+        col=red,
+        las=1,
+        cex.lab=1.2,
+        sub="Data: acting now measurement framework"
+)
+
+#Address any outliers
+```
+
+Histogram
+
+```{r}
+# Visualise
+library(ggplot2)
+
+ggplot(acting_now_mft, aes(x = land_size_hectares)) +
+  geom_histogram(binwidth = 1, fill = yellow, color = "white") +
+  labs(x = "Land Size (Hectares)", y = "Frequency", title = "Distribution of Land Size (in hectares)") +
+  theme_minimal()
+```
+
+#### Primary crops
+
+B.6 What is/are the primary food crops that you are cultivating?
+
+```{r}
+library(dplyr)
+
+primary_crops_data <- acting_now_mft %>%
+  tidyr::separate(primary_crops_planted,
+                  into = c("tea", "coffee", "cocoa", "palm", "sugar", "fruits", "vegetables", "soy", "cotton", "maize", "aquaculture", "rice", "cassava", "groundnut", "none", "other"),
+                  sep = " ") %>%
+  dplyr::mutate(across(tea:other, ~ ifelse(is.na(.), 0, 1)))
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+
+freq_primary_crops <- primary_crops_data %>%
+  summarize(across(tea:other, ~ sum(., na.rm = TRUE))) %>%
+  t() %>%
+  as.data.frame() %>%
+  filter(as.numeric(V1) >= 5) %>% #filter crops that are producded by at least 5 farmers
+  mutate(primary_crops = row.names(.)) %>%
+  rename(freq_primary_crops = V1) 
+
+data <- data.frame(primary_crops = freq_primary_crops$primary_crops, freq_primary_crops = as.numeric(freq_primary_crops$freq_primary_crops))
+
+# Store the maximum frequency
+max_freq <- max(data$freq_primary_crops)
+
+# Plot the bar chart
+ggplot(data) +
+  aes(x = primary_crops, y = freq_primary_crops) +
+  geom_bar(fill = yellow, stat = "identity") +
+  geom_text(aes(label = freq_primary_crops), vjust = -0.5, color = "black", size = 3) +
+  labs(
+    x = "Primary crops planted",
+    y = "Frequency",
+    title = "Primary crops planted by farmers",
+    subtitle = "Note: Crops that are planted by less than 5 farmers have been removed as a cleaning step."
+  ) +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, max_freq))  # Set the y-axis limits using the stored maximum frequency
+
+```
+
+#### Membership of producer organisation
+
+```{r}
+#Is the respondent member of any producer organisation?
+table(acting_now_mft$producer_organisation_membersh)
+
+
+#rename labels into yes or no (because it shows option_1 and option_2)
+
+acting_now_mft$producer_organisation_membersh <- recode(acting_now_mft$producer_organisation_membersh, "option_1" = "yes", "option_2" = "no")
+
+```
+
+```{r}
+# Compute the proportions
+prop <- prop.table(table(acting_now_mft$producer_organisation_membersh))
+
+# Create a data frame for the pie chart
+pie_data <- data.frame(category = names(prop),
+                      prop = prop,
+                      label = paste(names(prop), "\n", round(prop * 100, 2), "%"))
+
+# Define the colors
+colors <- c("grey", yellow)
+
+# Create the pie chart using ggplot
+ggplot(pie_data, aes(x = factor(1), y = prop, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = colors) +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Producer organisation?",
+       title = "Whether or not farmer is member of producer organisation",
+       subtitle  = "Data: acting now measurement framework") +
+  theme_void() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.caption = element_text(color = "black", size = 10),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(title = "Producer organisation?")) +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            color = "black",
+            size = 3)
+```
+
+## 5. **Service provider profile**
+
+#### Age of the owner
+
+```{r}
+#Age of the owner
+summary(acting_now_mft$age_of_the_owne)
+```
+
+Data quality
+
+```{r}
+#Visualise with a boxplot
+boxplot(acting_now_mft$age_of_the_owne,
+        ylab="Age of Owner",
+        main="Boxplot of owner age",
+        col=red,
+        las=1,
+        cex.lab=1.2,
+        sub="Data: acting now measurement framework"
+      
+)
+
+#Address outliers
+```
+
+Visualizing histogram
+
+```{r}
+# Visualise age distribution
+library(ggplot2)
+
+ggplot(acting_now_mft, aes(x = age_of_the_owne)) +
+  geom_histogram(binwidth = 1, fill = yellow) +
+  labs(x = "Age", y = "Frequency", title = "Distribution of age of owner") +
+  theme_minimal()
+```
+
+#### Sex of owner
+
+```{r}
+#sex of owner
+table(acting_now_mft$sex_of_the_owner)
+```
+
+Visualise:
+
+```{r}
+# Compute the proportions
+prop_sex_owner <- prop.table(table(acting_now_mft$sex_of_the_owner))
+
+# Create a data frame for the pie chart
+pie_data <- data.frame(category = names(prop_sex_owner),
+                      prop = prop_sex_owner,
+                      label = paste(names(prop_sex_owner), "\n", round(prop_sex_owner * 100, 2), "%"))
+
+# Define the colors
+colors <- c("grey", yellow)
+
+# Create the pie chart using ggplot
+ggplot(pie_data, aes(x = factor(1), y = prop_sex_owner, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = colors) +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Sex",
+       title = "Sex of the owner",
+       subtitle  = "Data: acting now measurement framework") +
+  theme_void() +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        plot.caption = element_text(color = "black", size = 10),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(title = "Sex")) +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            color = "black",
+            size = 3)
+```
+
+#### Type of service provider
+
+```{r}
+#What is the type of service provider?
+#table
+table(acting_now_mft$type_of_service_provider)
+```
+
+```{r}
+#graph
+# you can also consider a percentage graph, see the graph for "relationship with head of household for example"
+library(dplyr)
+library(ggplot2)
+acting_now_mft %>%
+ filter(!is.na(type_of_service_provider)) %>%
+ ggplot() +
+ aes(x = type_of_service_provider) +
+ geom_bar(fill=yellow) +
+  geom_text(
+    aes(x = type_of_service_provider,
+        label = after_stat(count)),
+     stat = "count",
+    vjust = -0.5) +
+ labs(x = "Type of service provider", 
+ y = "Frequency", title = "Type of service provider") +
+ theme_minimal() +
+  theme(
+    plot.title = element_text(color = "black", size = 14, face = "bold"),
+    plot.caption = element_text(color = "black", size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+#### If Financial institute, specify what kind of financial institute
+
+```{r}
+#If Financial institute, specify what kind of financial institute
+table(acting_now_mft$financial_institute_specify)
+```
+
+#### When was the service provider formed?
+
+```{r}
+#When was the service provider formed? by gender
+table(acting_now_mft$year_of_establishment)
+```
+
+#### Members
+
+6.  How many male members do you have?
+7.  How many female members do you have?
+8.  What is the total number of employees?
+
+```{r}
+#How many male members do you have? How many female members do you have? What is the total number of employees?
+summary(acting_now_mft$male_members)
+summary( acting_now_mft$female_members)
+summary( acting_now_mft$total_number_of_employees)
+
+```
+
+#### 
+
+@WARNING: THIS IS SAME WITH SOME POINTS IN #Small scale food producers
+with new or improved access to inputs and services so we leave this one
+
+```{r}
+
+
+
+```
+
+## 6. Food sufficiency
+
+#### MAHFP indicator calculation
+
+Calculate the MAHFP score (according to formulas stated here:
+<https://www.fantaproject.org/sites/default/files/resources/MAHFP_June_2010_ENGLISH_v4.pdf>)
+for each farmer
+
+```{r}
+#Were there months, in the past 12 months, in which you did not have enough food to meet your family’s needs?
+table(acting_now_mft$food_sufficiency)
+
+annually_sufficiency <- acting_now_mft$food_sufficiency
+```
+
+Let's split the variable
+
+```{r}
+library(tidyr)
+specific_months_split <- acting_now_mft %>%
+  separate(specific_months, into = c("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), sep = " ") %>%
+  mutate_at(vars(january:december), ~if_else(is.na(.), 0, 1))
+```
+
+```{r}
+acting_now_mft$MAHFP_score <- 12 - rowSums(specific_months_split[, c("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")], na.rm = TRUE)
+
+acting_now_mft$MAHFP_score
+
+```
+
+Second, an average for all the households in the sample is calculated.
+The denominator should include all households interviewed, even those
+who did not experience any months of inadequate household food
+provisioning.
+
+```{r}
+Average_MAHFP = (sum(acting_now_mft$MAHFP_score)) / nrow(specific_months_split)
+Average_MAHFP
+
+#you can also consider to calculate the median and to disaggregate results by gender, youth, or region
+```
+
+##### Disaggregation based on gender
+
+Now we want to evaluate whether there are significant differences
+between male and female farmers. We use a t-test for this.
+
+```{r}
+#two groups: male farmers and female farmers
+male_scores <- acting_now_mft$MAHFP_score[acting_now_mft$sex_of_respondent== "male"]
+female_scores <- acting_now_mft$MAHFP_score[acting_now_mft$sex_of_respondent == "female"]
+
+# Perform the t-test
+result <- t.test(male_scores, female_scores)
+
+# Print the t-test result
+print(result)
+```
+
+What can you see in this test?
+
+-   The t-statistic: The t-statistic measures the difference between the
+    means of the two groups relative to the variation within each group.
+    The larger the absolute value of the t-statistic, the more evidence
+    there is for a difference between the groups.
+
+-   Degrees of Freedom: The degrees of freedom (df) represent the number
+    of independent pieces of information available to estimate the
+    population parameters. In a two-sample t-test, the degrees of
+    freedom depend on the sample sizes of the two groups and can affect
+    the critical values and p-value calculation.
+
+-   p-value: The p-value is a measure of the evidence against the null
+    hypothesis. It represents the probability of observing a result as
+    extreme as the one obtained if the null hypothesis is true. A
+    p-value less than a predetermined significance level (e.g., 0.05)
+    suggests evidence to reject the null hypothesis and conclude that
+    there is a statistically significant difference between the groups.
+
+How to read the results?
+
+-   If the p-value is less than the significance level (e.g., p \<
+    0.05), you can reject the null hypothesis and conclude that there is
+    a statistically significant difference between the means of the two
+    groups.
+-   If the p-value is greater than the significance level, you do not
+    have enough evidence to reject the null hypothesis, indicating that
+    there is not enough evidence to support a significant difference
+    between the means of the two groups.
+
+Additionally, it's important to consider the direction of the difference
+(i.e., which group has a higher mean) and the effect size measures, such
+as Cohen's d or the mean difference, to understand the practical
+significance of the difference.
+
+*Note: this approach is also applicable for other tests of differences
+between groups you may want to perform*.
+
+```{r}
+# Visualise the difference
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+acting_now_mft_clean <- acting_now_mft %>%
+  filter(!is.na(MAHFP_score) & !is.na(sex_of_respondent)) %>%
+  group_by(sex_of_respondent, MAHFP_score) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(share_of_farmers = n / sum(n))
+
+ggplot(acting_now_mft_clean, aes(x = as.factor(MAHFP_score), y = share_of_farmers, fill = sex_of_respondent)) +
+  geom_bar(position = "dodge", stat = "identity", width = 0.7, color = "white") +
+  geom_text(aes(label = paste0(round(share_of_farmers * 100), "%")), position = position_dodge(width = 0.7), vjust = -0.5, color = "black", size = 3) +
+  labs(
+    x = "MAHFP Score",
+    y = "Share of farmers %",
+    title = "MAHFP Score by Gender"
+  ) +
+  scale_x_discrete(labels = 1:12, limits = as.character(1:12)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  scale_fill_manual(values = c("grey", yellow), name = "Gender") +
+  theme_minimal()
+```
+
+```{r}
+#TO DO: MAKE CODE TO EVALUATE THIS
+
+#Additionally we are interested to learn whether those households who have a higher income, are more likely to be food secure AND whether those households who have higher food production volumes are more likely to be food secure.  The categories for disaggregation will be developed when doing the baseline. 
+```
+
+#### Household hunger scale (For triangulation)
+
+@Step 1. The first step is to recode the responses to each
+frequency-of-occurrence question from three frequency categories
+("rarely," "sometimes," "often") into two frequency categories ("rarely
+or sometimes" and "often").
+
+For each of the new variables created, a frequency response of "rarely"
+(originally coded as "1") is coded as "1"; a frequency response of
+"sometimes" (originally coded as "2") is coded as "1"; and a frequency
+response of "often" (originally coded as "3") is coded as "2"
+
+@Step 2. Next, add a code of "0" for households that replied "No" to
+each corresponding occurrence question. Once this step is completed, all
+households should have a value of 0, 1, or 2 for each of the three new
+variables created, NewQ1, NewQ2, and NewQ3
+
+@Step 3. The values of NewQ1, NewQ2, and NewQ3 are then summed for each
+household to calculate the HHS score. If the tabulation has been carried
+out correctly, each household will have an HHS score between 0 and 6.
+These values are then used to generate the HHS indicators
+
+#Lack of resources
+
+```{r}
+#In the past [4 weeks/30 days], was there ever no food to eat of any kind in your house because of lack of resources to get food?
+table(acting_now_mft$lack_of_resources)
+#How often did this happen in the past [4 weeks/ 30 days]?
+table(acting_now_mft$occasion_lack_of_resources)
+
+#recoding
+library(dplyr)
+
+acting_now_mft <- acting_now_mft %>%
+  mutate(occasion_lack_of_resources_rec = case_when(
+    lack_of_resources == "no" ~ 0,
+    occasion_lack_of_resources %in% c("rarely__1_2_times", "sometimes__3_10_times") ~ 1,
+    occasion_lack_of_resources == "often__more_than_10_times" ~ 2,
+    TRUE ~ NA_integer_  #sets any unmatched values to NA
+  ))
+table(acting_now_mft$occasion_lack_of_resources_rec)
+
+```
+
+Sufficiency of food - one meal
+
+```{r}
+#In the past [4 weeks/30 days], did you or any household member go to sleep at night hungry because there was not enough food?
+table(acting_now_mft$sufficiency_of_food_one_meal)
+#How often did this happen in the past [4 weeks/30 days]?
+table(acting_now_mft$occasion_sufficiency_of_food)
+
+#recoding
+library(dplyr)
+
+acting_now_mft <- acting_now_mft %>%
+  mutate(occasion_sufficiency_of_food_rec = case_when(
+    sufficiency_of_food_one_meal == "no" ~ 0,
+    occasion_sufficiency_of_food %in% c("rarely__1_2_times", "sometimes__3_10_times") ~ 1,
+    occasion_sufficiency_of_food == "often__more_than_10_times" ~ 2,
+    TRUE ~ NA_integer_  #sets any unmatched values to NA
+  ))
+
+table(acting_now_mft$occasion_sufficiency_of_food_rec)
+```
+
+Suffiency of food - several meals
+
+```{r}
+#In the past [4 weeks/30 days], did you or any household member go a whole day and night without eating anything at all because there was not enough food?
+table(acting_now_mft$sufficiency_of_food_several_me)
+#How often did this happen in the past [4 weeks/30 days]?
+table(acting_now_mft$occasionality)
+
+#recoding
+library(dplyr)
+
+acting_now_mft <- acting_now_mft %>%
+  mutate(occasionality_rec = case_when(
+    sufficiency_of_food_several_me == "no" ~ 0,
+    occasionality %in% c("rarely__1_2_times", "sometimes__3_10_times") ~ 1,
+    occasionality == "often__more_than_10_times" ~ 2,
+    TRUE ~ NA_integer_  #sets any unmatched values to NA
+  ))
+
+table(acting_now_mft$occasionality_rec)
+```
+
+Calculation
+
+```{r}
+#calculate the score using the three new variables
+acting_now_mft$HHS_score <- rowSums(acting_now_mft[, c("occasion_lack_of_resources_rec", "occasion_sufficiency_of_food_rec", "occasionality_rec")])
+
+acting_now_mft$HHS_score_group <- cut(acting_now_mft$HHS_score, 
+                                     breaks = c(0, 1, 3, 6),
+                                     labels = c("Little to no hunger in the household", 
+                                                "Moderate hunger in the household", 
+                                                "Severe hunger in the household"),
+                                     include.lowest = TRUE)
+
+summary(acting_now_mft$HHS_score)
+```
+
+## 7. Income from farm produce
+
+#### Type of crops
+
+##### What are the main crops?
+
+E.1 What is/are the crop(s) you grow in your farm?
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+total_farmers <- nrow(acting_now_mft)
+
+crop_assessment_clean <- crop_assessment %>%
+  filter(!is.na(crop_selecting)) %>%
+  count(crop_selecting) %>%
+  mutate(share_of_farmers = n / total_farmers) %>%
+  filter(share_of_farmers >= 0.01) # Filter crops with share >= 1%
+
+# Frequency table
+frequency_table <- crop_assessment_clean %>%
+  select(crop_selecting, n, share_of_farmers)
+
+# Bar graph
+ggplot(crop_assessment_clean, aes(x = crop_selecting, y = share_of_farmers)) +
+  geom_bar(fill = yellow, stat = "identity", width = 0.7, color = "white") +
+  geom_text(aes(label = paste0(round(share_of_farmers * 100), "%")), vjust = -0.5, color = "black", size = 3) +
+  labs(
+    x = "Crop",
+    y = "Share of Farmers %",
+    title = "Crop Selection by Farmers",
+    subtitle = "Frequency Table"
+  ) +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1))
+
+```
+
+##### What is the crop size of the main crop?
+
+```{r}
+#What is the size of land which is planted with [the crop of interest] in the last 12 months?
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Calculate the mean and median for each crop
+crop_summary <- crop_assessment %>%
+  group_by(crop_selecting) %>%
+  summarize(mean = mean(area_crop_of_interest), median = median(area_crop_of_interest))
+
+# Reshape the data frame to have separate rows for mean and median
+crop_summary_long <- pivot_longer(crop_summary, cols = c(mean, median), names_to = "stat", values_to = "value")
+
+# Define two colors
+color1 <- yellow 
+
+# Plot the mean and median values in a graph
+ggplot(crop_summary_long, aes(x = crop_selecting, y = value, fill = stat)) +
+  geom_bar(position = "dodge", stat = "identity", width = 0.7) +
+  labs(x = "Crop", y = "Farm Size (ha)", title = "Mean and Median Farm Size of Main Crop, Disaggregated by Crop") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1),
+        legend.title = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank()) +
+  scale_fill_manual(values = c(mean = color1, median = color2), name = "Value") +
+  geom_text(aes(label = round(value, 2)), position = position_dodge(width = 0.7), vjust = -0.5, color = "black", size = 3) +
+  coord_cartesian(clip = "off")  # Prevent labels from being clipped
+```
+
+##### Describe how often the crops are harvested
+
+How many times do you harvest [crop] every calendar year?
+
+```{r}
+data.frame(table(crop_assessment$harvesting_frequency))
+
+# Calculate the frequencies of harvesting_frequency, disaggregated by crop_selecting
+frequency_summary <- crop_assessment %>%
+  group_by(crop_selecting, harvesting_frequency) %>%
+  summarize(frequency = n())
+
+# Print the frequency summary
+print(frequency_summary)
+
+```
+
+#### Revenues
+
+##### **Volume sold in the last year**
+
+This chunck of code is crop and country specific, becuase of measurement
+units. Double check the reference period and adapt this analysis to your
+preferences. The farmer can indicate different reference period. Make
+sure to multiply the total volume sold by that reference period (if
+reference period is not a year). This is measured by the variable sales.
+At this point we do not know what actually was asked in that question
+which makes that we cannot fully prepare the calculation. We calculate
+volume sold in kg.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Step 1: Create a variable to harmonize the quantities sold, represented in kg.
+crop_assessment <- crop_assessment %>%
+  mutate(value_of_measure_kg = case_when(
+    unit_of_measure == "kg" ~ 1,
+    unit_of_measure == "mt" ~ 1000,
+    unit_of_measure == "tonne" ~ 1000,
+    unit_of_measure == "other" ~ NA
+  )) %>%
+  mutate(total_volume_sold_kg = value_of_measure_kg * volume_sold_last_harvest)
+#NOTE! consider also multiplying by the frequency indicated in sales. In that case, the chunk of code will continue as follows:
+# 
+# crop_assessment <- crop_assessment %>%
+#   mutate(
+#     frequency_sold = case_when(
+#       sales == "every_month" ~ 12,
+#       sales == "every_three_weeks" ~ 17.33,
+#       sales == "every_two_weeks" ~ 26,
+#       sales == "four_times_per_year" ~ 4,
+#       sales == "three_times_per_year" ~ 3,
+#       sales == "twice_per_year" ~ 2,
+#       sales == "yearly" ~ 1
+#     )
+# ) %>%
+# mutate(total_volume_sold_kg = value_of_measure_kg * volume_sold_last_harvest*frequency_sold)
+
+# Step 2: Calculate share of farmers for each crop.
+crop_assessment_clean <- crop_assessment %>%
+  filter(!is.na(crop_selecting)) %>%
+  count(crop_selecting) %>%
+  mutate(share_of_farmers = n / total_farmers) %>%
+  filter(share_of_farmers >= 0.01)
+
+# Step 3: Filter dataset and prepare for plotting.
+crop_assessment_filtered <- crop_assessment %>%
+  select(total_volume_sold_kg, crop_selecting) %>%
+  inner_join(crop_assessment_clean, by = "crop_selecting") %>%
+  group_by(crop_selecting) %>%
+  filter(complete.cases(total_volume_sold_kg) &
+           total_volume_sold_kg >= quantile(total_volume_sold_kg, 0.05, na.rm = TRUE) &
+           total_volume_sold_kg <= quantile(total_volume_sold_kg, 0.95, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 4: Create the histogram plot.
+ggplot(crop_assessment_filtered, aes(x = total_volume_sold_kg)) +
+  geom_histogram(fill = "grey", color = "white", bins = 20) +
+  labs(
+    x = "Total volume sold in last harvest (kg)",
+    y = "Count",
+    title = "Total volume sold in last harvest (kg)"
+  ) +
+  theme_minimal() +
+  facet_wrap(~ crop_selecting, ncol = 2, scales = "free")
+
+```
+
+The same approach as above can be applied for volume_not_sold and
+volume_consumed (that represent quantities) and the variable
+unit_of_measure_volumes for the unit of measurement. Please
+contextualize this section and analyse how you like. Also double check
+the reference period.
+
+**Volume not sold**
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Step 1: Create a variable to harmonize the quantities not sold, represented in kg.
+crop_assessment <- crop_assessment %>%
+  mutate(value_of_measure_kg_not_sold = case_when(
+    unit_of_measure_volumes == "kg" ~ 1,
+    unit_of_measure_volumes == "mt" ~ 1000,
+    unit_of_measure_volumes == "tonne" ~ 1000,
+    unit_of_measure_volumes == "other" ~ NA
+  )) %>%
+  mutate(total_volume_not_sold_kg = value_of_measure_kg_not_sold  * volume_not_sold)
+
+# Step 2: Calculate share of farmers for each crop.
+crop_assessment_clean <- crop_assessment %>%
+  filter(!is.na(crop_selecting)) %>%
+  count(crop_selecting) %>%
+  mutate(share_of_farmers = n / total_farmers) %>%
+  filter(share_of_farmers >= 0.01)
+
+# Step 3: Filter dataset and prepare for plotting.
+crop_assessment_filtered <- crop_assessment %>%
+  select(total_volume_not_sold_kg, crop_selecting) %>%
+  inner_join(crop_assessment_clean, by = "crop_selecting") %>%
+  group_by(crop_selecting) %>%
+  filter(complete.cases(total_volume_not_sold_kg) &
+           total_volume_not_sold_kg >= quantile(total_volume_not_sold_kg, 0.05, na.rm = TRUE) &
+           total_volume_not_sold_kg <= quantile(total_volume_not_sold_kg, 0.95, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 4: Create the histogram plot.
+ggplot(crop_assessment_filtered, aes(x = total_volume_not_sold_kg)) +
+  geom_histogram(fill = "grey", color = "white", bins = 20) +
+  labs(
+    x = "Total volume not sold in last harvest (kg)",
+    y = "Count",
+    title = "Total volume not sold in last harvest (kg)"
+  ) +
+  theme_minimal() +
+  facet_wrap(~ crop_selecting, ncol = 2, scales = "free")
+
+```
+
+**Volume used for own consumption**
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Step 1: Create a variable to harmonize the quantities not sold, represented in kg.
+crop_assessment <- crop_assessment %>%
+  mutate(value_of_measure_kg_consumed = case_when(
+    unit_of_measure_volumes == "kg" ~ 1,
+    unit_of_measure_volumes == "mt" ~ 1000,
+    unit_of_measure_volumes == "tonne" ~ 1000,
+    unit_of_measure_volumes == "other" ~ NA
+  )) %>%
+  mutate(total_volume_consumed_kg = value_of_measure_kg_consumed  * volume_consumed)
+
+# Step 2: Calculate share of farmers for each crop.
+crop_assessment_clean <- crop_assessment %>%
+  filter(!is.na(crop_selecting)) %>%
+  count(crop_selecting) %>%
+  mutate(share_of_farmers = n / total_farmers) %>%
+  filter(share_of_farmers >= 0.01)
+
+# Step 3: Filter dataset and prepare for plotting.
+crop_assessment_filtered <- crop_assessment %>%
+  select(total_volume_consumed_kg, crop_selecting) %>%
+  inner_join(crop_assessment_clean, by = "crop_selecting") %>%
+  group_by(crop_selecting) %>%
+  filter(complete.cases(total_volume_consumed_kg) &
+           total_volume_consumed_kg >= quantile( total_volume_consumed_kg, 0.05, na.rm = TRUE) &
+            total_volume_consumed_kg <= quantile( total_volume_consumed_kg, 0.95, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 4: Create the histogram plot.
+ggplot(crop_assessment_filtered, aes(x = total_volume_consumed_kg)) +
+  geom_histogram(fill = "grey", color = "white", bins = 20) +
+  labs(
+    x = "Total volume consumed in last harvest (kg)",
+    y = "Count",
+    title = "Total volume consumed in last harvest (kg)"
+  ) +
+  theme_minimal() +
+  facet_wrap(~ crop_selecting, ncol = 2, scales = "free")
+```
+
+##### Frequency of selling
+
+How many times did you sell in the last 12 months? You can choose to
+perform further analysis.
+
+```{r}
+#frequency of selling
+table(crop_assessment$sales, crop_assessment$crop_selecting)
+```
+
+##### Average sale price
+
+```{r}
+#What is the average sale price received per unit of the commodity of the past year?
+table(crop_assessment$price, crop_assessment$crop_selecting)
+
+library(ggplot2)
+library(dplyr)
+
+# Define color palette
+color_palette <- c(yellow, "#FFDB58", "#FFE48C", "#FFEDBF", "#FFF8F2")
+
+# Remove outliers based on the percentile rule (5% and 95%)
+crop_assessment_filtered <- crop_assessment %>%
+  group_by(crop_selecting, unit_of_measure) %>%
+  filter(price >= quantile(price, 0.05) & price <= quantile(price, 0.95)) %>%
+  ungroup()
+
+# Calculate average and median price by crop and unit of measure
+price_stats <- crop_assessment_filtered %>%
+  group_by(crop_selecting, unit_of_measure) %>%
+  summarise(
+    average_price = mean(price),
+    median_price = median(price)
+  ) %>%
+  ungroup()
+
+# Calculate the count of farmers for each crop
+farmer_counts <- crop_assessment_filtered %>%
+  group_by(crop_selecting) %>%
+  summarise(farmer_count = n())
+
+# Merge the farmer counts with price stats
+price_stats <- price_stats %>%
+  left_join(farmer_counts, by = "crop_selecting")
+
+# Create a separate graph for each crop
+graphs <- lapply(unique(price_stats$crop_selecting), function(crop) {
+  crop_data <- price_stats %>% filter(crop_selecting == crop)
+
+  graph <- ggplot(crop_data, aes(x = unit_of_measure, y = average_price, fill = unit_of_measure)) +
+    geom_bar(stat = "identity", position = "dodge", color = "white") +
+    geom_text(aes(label = paste("Mean:", round(average_price, 2))),
+              vjust = -0.3, color = "black", size = 3.5, position = position_dodge(width = 0.9)) +
+    geom_text(aes(label = paste("Median:", round(median_price, 2))),
+              vjust = 1.3, color = "black", size = 3.5, position = position_dodge(width = 0.9)) +
+    labs(
+      x = "Unit of Measure",
+      y = "Price",
+      title = paste("Average and Median Price -", crop),
+      subtitle = paste("Based on", crop_data$farmer_count[1], "farmers")
+    ) +
+    scale_fill_manual(values = color_palette, name = "Unit of Measure") +
+    theme_minimal() +
+    theme(legend.title = element_blank())
+
+  return(graph)
+})
+
+# Print the graphs
+invisible(lapply(graphs, print))
+
+
+
+
+
+
+```
+
+##### Total revenues from the crops
+
+Double check the reference period!! Year vs last harvest
+
+***We still need to sum the revenues from different crops for a single
+farmer, currently not possible with the data.***
+
+```{r}
+#What are the total revenues from the crops? multiply the volume sold with the price above
+crop_assessment$total_revenue_last_harvest<-crop_assessment$volume_sold_last_harvest*crop_assessment$price
+
+
+
+```
+
+##### How was farm income in the past year as compared to the year before?
+
+```{r}
+#How was farm income in the past year as compared to the year before? 
+table(crop_assessment$qualitative_farm_income_assess)
+table(crop_assessment$qualitative_farm_income_assess, crop_assessment$crop_selecting)
+
+library(ggplot2)
+library(dplyr)
+
+# Define color palette
+color_palette <- c(yellow, "#FFDB58", "#FFE48C")
+
+# Step 1: Calculate the share of farmers for each crop and income assessment
+crop_assessment_clean <- crop_assessment %>%
+  filter(!is.na(crop_selecting)) %>%
+  count(crop_selecting, qualitative_farm_income_assess) %>%
+  group_by(crop_selecting) %>%
+  mutate(share_of_farmers = n / sum(n)) %>%
+  ungroup() %>%
+  filter(share_of_farmers >= 0.01) # Filter crops with share >= 1%
+
+# Step 2: Create a single graph for all crops
+ggplot(crop_assessment_clean, aes(x = crop_selecting, y = share_of_farmers, fill = qualitative_farm_income_assess)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "Crop",
+    y = "Share of Farmers",
+    title = "Share of Farmers by Crop and Income Assessment",
+    fill = "How was farm income \nin the past year as \ncompared to the year \nbefore?"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = color_palette) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  geom_text(aes(label = paste0(round(share_of_farmers * 100), "%")), position = position_dodge(width = 0.9),
+            vjust = -0.5, color = "black", size = 3)
+
+
+```
+
+#If farm income was worse, what was the reason for it?
+
+```{r}
+# If farm income was worse, what was the reason for it?
+# Separate the reason_for_low_income column into individual reason columns
+reason_for_low_income_split <- separate(crop_assessment, reason_for_low_income, into = reason_low_income, sep = " ")
+
+# Define the list of reasons for low income
+reason_low_income <- c("poor price", "low productivity", "high costs", "no buyers", "post harvest losses", "other")
+
+# Calculate the frequency of each reason for low income
+freq_reason_low_income <- sapply(reason_low_income, function(reason) sum(!is.na(reason_for_low_income_split[[reason]])))
+
+# Print the frequency of each reason for low income
+freq_reason_low_income
+
+
+
+```
+
+```{r}
+data.frame(reason_low_income, freq_reason_low_income)
+  
+```
+
+#disaggregate by crop
+
+```{r}
+
+# If farm income was worse, what was the reason for it?
+# Separate the reason_for_low_income column into individual reason columns
+reason_for_low_income_split <- separate(crop_assessment, reason_for_low_income, into = c("poor_price", "low_productivity", "high_costs", "no_buyers", "post_harvest_losses", "other"), sep = " ")
+
+# Define the list of reasons for low income
+reason_low_income <- c("poor_price", "low_productivity", "high_costs", "no_buyers", "post_harvest_losses", "other")
+
+# Create an empty data frame to store the results
+result <- data.frame(Crop = character(0), stringsAsFactors = FALSE)
+
+# Loop through each crop and calculate the frequency of each reason for low income
+for (crop in unique(crop_assessment$crop_selecting)) {
+  crop_data <- reason_for_low_income_split[reason_for_low_income_split$crop_selecting == crop, ]
+  freq_reason_low_income <- colSums(!is.na(crop_data[, reason_low_income]))
+  result <- rbind(result, c(crop, freq_reason_low_income))
+}
+
+# Set column names for the result data frame
+colnames(result) <- c("Crop", reason_low_income)
+
+result
+
+```
+
+#If farm income was better, what was the reason for it?
+
+```{r}
+# If farm income was better, what was the reason for it?
+# Separate the reason_for_high_income column into individual reason columns
+reason_for_high_income_split <- separate(crop_assessment, reason_for_high_income, into = c("good_price", "high_productivity", "lower_costs", "more_buyers", "other"), sep = " ")
+
+# Define the list of reasons for high income
+reason_high_income <- c("good_price", "high_productivity", "lower_costs", "more_buyers", "other")
+
+# Calculate the frequency of each reason for high income
+freq_reason_high_income <- colSums(!is.na(reason_for_high_income_split[, reason_high_income]))
+
+# Create a data frame with reasons for high income and their frequencies
+result <- data.frame(reason_high_income, freq_reason_high_income)
+result
+```
+
+#disaggregate by crop
+
+```{r}
+
+# If farm income was better, what was the reason for it?
+# Separate the reason_for_high_income column into individual reason columns
+reason_for_high_income_split <- separate(crop_assessment, reason_for_high_income, into = c("good_price", "high_productivity", "lower_costs", "more_buyers", "other"), sep = " ")
+
+# Define the list of reasons for high income
+reason_high_income <- c("good_price", "high_productivity", "lower_costs", "more_buyers", "other")
+
+# Create an empty data frame to store the results
+result <- data.frame(Crop = character(0), stringsAsFactors = FALSE)
+
+# Loop through each crop and calculate the frequency of each reason for high income
+for (crop in unique(crop_assessment$crop_selecting)) {
+  crop_data <- reason_for_high_income_split[reason_for_high_income_split$crop_selecting == crop, ]
+  freq_reason_high_income <- colSums(!is.na(crop_data[, reason_high_income]))
+  result <- rbind(result, c(crop, freq_reason_high_income))
+}
+
+# Set column names for the result data frame
+colnames(result) <- c("Crop", reason_high_income)
+
+result
+
+
+
+```
+
+#If the price was better, what was the reason for it?
+
+*Note, you can decide to also make a graph for the above qualitative
+questions related to income and price, this is an example graph. Please
+think about what you want to visualize, you can use the code below as
+input for the other graphs.*
+
+```{r}
+library(tidyr)
+
+# Split the variable and create binary variables
+reason_for_good_price_split <- crop_assessment %>%
+  separate(reason_for_good_price, into = c("new_buyers", "better_grade", "sustainability_premium", "government_pricing_policies", "better_negotiation", "other"), sep = " ") %>%
+  mutate(across(new_buyers:other, ~if_else(!is.na(.), 1, 0)))
+
+# Calculate the sum of each binary variable
+sum_data <- reason_for_good_price_split %>%
+  summarise(across(new_buyers:other, sum)) %>%
+  pivot_longer(cols = everything(), names_to = "Reason", values_to = "Count")
+
+# Filter out reasons with count less than 5% of total responses
+sum_data <- sum_data %>%
+  filter(Count >= sum(Count) * 0.05)
+
+# Replace underscores with spaces in the Reason column
+sum_data$Reason <- gsub("_", " ", sum_data$Reason)
+
+# Create a bar plot
+ggplot(sum_data, aes(x = reorder(Reason, -Count), y = Count)) +
+  geom_bar(stat = "identity", width = 0.5, fill = yellow) +
+  labs(title = "Reasons for Good Price", x = "Reason", y = "Number of farmers") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_text(aes(label = Count), vjust = -0.5, color = "black", size = 3) +
+  xlab(NULL) +
+  ylim(0, max(sum_data$Count) + 5)
+
+```
+
+#What can farmer do with improved income?
+
+Note that we were not able to find the right variable
+
+```{r}
+#If farm income was good, what have you been able to do because of the improvement in income?
+
+
+```
+
+#### Production costs total value of your three main production costs
+
+Note! In our sample dataset these values were empty, hence we were not
+able to test this section.
+
+```{r}
+
+#What is the total value of your three main production costs of harvesting in the past year?
+total_cost<-rowSums(crop_assessment[, c("labour", "seeds", "fertiliser", "machinery", "animal_feed", "transport", "leasing_land", "calculation")], na.rm = TRUE)
+```
+
+#### Gross margin
+
+#### Small scale food producers with improved income Type of crops
+
+To calculate the Income of a targeted Small-Scale Food Producer =
+((total volume x average price) - total production costs)/(total volume
+x average price). To calculate **the average gross margins** of the
+target group on project level, the above is divided by the total number
+of small scale (food) producers targeted in the project. Average gross
+margins
+
+***Currently this code is not possible because we do not have unique
+producer IDs***
+
+```{r}
+# Average farm revenue of Small-Scale Food Producers
+# Calculate the income of a targeted small-scale food producer
+#crop_assessment$gross_margin <- (crop_assessment$total_revenue_last_harvest - crop_assessment$total_cost) / crop_assessment$total_revenue_last_harvest
+
+# Calculate the average gross margins on the project level
+#Currently this code is not possible because we do not have unique producer IDs
+#total_producers <- length(unique(crop_assessment$producer_id)) 
+#crop_assessment$avg_gross_margin <- crop_assessment$gross_margin / total_producers
+```
+
+##### Disaggregate by gender
+
+Are income levels significantly different for male and female farmers?
+We evaluate with a t-test.
+
+***Currently this code is not possible because we do not have unique
+producer IDs, we need those to match the crop assessment data with the
+acting_now_mft data!***
+
+```{r}
+# Two groups: male farmers and female farmers
+#male_income <- crop_assessment$gross_margin[crop_assessment$sex_of_respondent == "male"]
+#female_income <- crop_assessment$gross_margin[crop_assessment$sex_of_respondent == "female"]
+
+# Perform the t-test
+#result <- t.test(male_income, female_income)
+
+# Print the t-test result
+#print(result)
+```
+
+Visualise the different income levels:
+
+```{r}
+# Create the histogram using ggplot
+# ggplot(acting_now_mft, aes(x = gross_margin, fill = sex_of_respondent)) +
+#   geom_histogram(position = "identity", bins = 20, alpha = 0.5) +
+#   labs(
+#     x = "Gross margin",
+#     y = "Frequency",
+#     title = "Income Distribution by Gender"
+#   ) +
+#   scale_fill_manual(values = c("grey", light_grey)) +
+#   theme_minimal() +
+#   theme(legend.position = "top") +
+#   facet_grid(sex_of_respondent ~ ., scales = "free_y") +
+#   geom_vline(
+#     aes(xintercept = mean(gross_margin, na.rm = TRUE)),
+#     color = "red",
+#     linetype = "dashed",
+#     size = 1
+#   )
+```
+
+##### Disaggregate by age group
+
+Are income levels significantly different for youth and non-youth
+farmers? We evaluate with a t-test.
+
+```{r}
+#TBD
+```
+
+Visualise the different income levels:
+
+```{r}
+# Create the histogram using ggplot
+#tbd
+```
+
+#### 8. Crop yield
+
+#### Small scale food producers with increased yield/hectare
+
+```{r}
+# Calculate yield per farmer, create a variable called total_volume_prod_kg
+
+# We have no full clarity on what variables can be used to calculate total productivity. Please calculate total productivity using your best understanding of how to calculate it (Total production in a harvest season * nr. of seasons)
+
+# Variables that can be used are:
+#harvesting_frequency: E.A.4 How many times do you harvest [crop] every calendar year?
+# E_A_5_1: E.A.5 What is the volume produced of the crop in the last harvest season of the calendar year?
+#volume_of_production_in_peak_l: E.A.6 What is the volume produced of the crop in the peak season the last calendar year?
+
+#in our sample dataset, the data was confilcting (E_A_5_1 vs volume_of_production_in_peak_l) with sometimes values being very different. We assume that total produce is measured using E_A_5_1 * harvesting_frequency.
+
+# land size per crop 
+# variable to use: area_crop_of_interest
+
+# Average annual yield/hectare per crop 
+# crop_assessment$yield_crop_ha <- (total_volume_prod_kg / area_crop_of_interest)
+# next step is to calculate the mean and median values.
+
+
+```
+
+##### Disaggregations
+
+###### By gender
+
+```{r}
+#Code for t-test comparing the average annual yield of two groups per crop.
+#Not possible for now in this template as we lack access to farmer id which enables us to match the datasets and disaggregate the results by gender.
+```
+
+###### By age group
+
+```{r}
+#Code for t-test comparing the average annual yield of two groups 
+#Not possible for now in this template as we lack access to farmer id which enables us to match the datasets and disaggregate the results by age group.
+```
+
+#### Production compared to year before
+
+```{r}
+##How was production in the past year as compared to the year before?
+library(ggplot2)
+
+# Filter out missing values for qualitative_yield_assessment and crop_selecting
+filtered_data <- crop_assessment %>%
+  filter(!is.na(qualitative_yield_assessment), !is.na(crop_selecting))
+
+# Calculate the percentage of farmers for each response, disaggregated by qualitative_yield_assessment
+yield_crop_summary <- filtered_data %>%
+  group_by(qualitative_yield_assessment, crop_selecting) %>%
+  summarise(count = n()) %>%
+  group_by(qualitative_yield_assessment) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+# Filter out values with less than 1% percentage
+yield_crop_summary <- yield_crop_summary %>%
+  filter(percentage >= 1)
+
+# Define the color palette
+color_palette <- c(yellow, "#FFD700", "#FFED85", "#E0E0E0", "#8C8C8C")
+
+# Create the bar plot with modified aesthetics
+ggplot(yield_crop_summary, aes(x = crop_selecting, y = percentage, fill = qualitative_yield_assessment)) +
+  geom_bar(stat = "identity", position = "dodge", color = "white") +
+  labs(x = "Crop", y = "Share of farmers (%)", fill = "How was production in the past year as compared to the year before?") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1),
+        axis.text.y = element_text(angle = 0, hjust = 1),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.title.y = element_text(angle = 90, vjust = 0.5),
+        plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm")) +
+  scale_fill_manual(values = color_palette) +
+  guides(fill = guide_legend(title = "How was production \nin the past year \nas compared to the \nyear before?")) +
+  geom_text(aes(label = paste0(round(percentage), "%")), position = position_dodge(width = 1), angle = 0, vjust = -0.5, color = "black", size = 3) +
+  labs(subtitle = "Note: Responses with less than 1% percentage are not shown") +
+  scale_y_continuous(labels = scales::percent)
+
+
+
+
+```
+
+If worse, why was this?
+
+```{r}
+###If worse -> why
+library(dplyr)
+library(tidyr)
+
+# Separate the columns and replace underscores with spaces
+reasons_data <- crop_assessment %>%
+  select(reason_for_worse_productivity) %>%
+  separate_rows(reason_for_worse_productivity, sep = " ") %>%
+  mutate(reason_for_worse_productivity = gsub("___", " ", reason_for_worse_productivity),
+          reason_for_worse_productivity = gsub("_", " ", reason_for_worse_productivity))
+
+# Remove NAs from reason_for_worse_productivity column
+reasons_data <- reasons_data[complete.cases(reasons_data$reason_for_worse_productivity), ]
+
+# Calculate counts and shares for each reason
+summary_table <- reasons_data %>%
+  group_by(reason_for_worse_productivity) %>%
+  summarise(count = n()) %>%
+  mutate(share = count / sum(count))
+
+# Print the summary table
+print(summary_table)
+
+```
+
+Dissaggregated by crop
+
+```{r}
+###If worse -> why
+library(dplyr)
+library(tidyr)
+
+# Separate the columns and keep crop_selecting variable, replacing underscores with spaces
+reasons_data <- crop_assessment %>%
+  select(crop_selecting, reason_for_worse_productivity) %>%
+  separate_rows(reason_for_worse_productivity, sep = " ") %>%
+  mutate(reason_for_worse_productivity = gsub("___", " ", reason_for_worse_productivity),
+          reason_for_worse_productivity = gsub("_", " ", reason_for_worse_productivity))
+
+# Remove NAs from reason_for_worse_productivity column
+reasons_data <- reasons_data[complete.cases(reasons_data$reason_for_worse_productivity), ]
+
+# Calculate counts and shares by crop and reason
+summary_table <- reasons_data %>%
+  group_by(crop_selecting, reason_for_worse_productivity) %>%
+  summarise(count = n()) %>%
+  group_by(crop_selecting) %>%
+  mutate(share = count / sum(count))
+
+# Print the summary table
+print(summary_table)
+
+```
+
+If better, why was this?
+
+```{r}
+###If better -> why
+library(dplyr)
+library(tidyr)
+
+# Separate the columns and replace underscores with spaces
+reasons_data <- crop_assessment %>%
+  select(reason_for_better_productivity) %>%
+  separate_rows(reason_for_better_productivity, sep = " ") %>%
+  mutate(reason_for_worse_productivity = gsub("_", " ", reason_for_better_productivity))
+
+# Remove NAs from reason_for_better_productivity column
+reasons_data <- reasons_data[complete.cases(reasons_data$reason_for_better_productivity), ]
+
+# Calculate counts and shares for each reason
+summary_table <- reasons_data %>%
+  group_by(reason_for_better_productivity) %>%
+  summarise(count = n()) %>%
+  mutate(share = count / sum(count))
+
+# Print the summary table
+print(summary_table)
+
+```
+
+Dissaggregated by crop
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Separate the columns and replace underscores with spaces
+reasons_data <- crop_assessment %>%
+  select(crop_selecting, reason_for_better_productivity) %>%
+  separate_rows(reason_for_better_productivity, sep = " ") %>%
+  mutate(reason_for_better_productivity = gsub("_", " ", reason_for_better_productivity))
+
+# Remove NAs from reason_for_better_productivity column
+reasons_data <- reasons_data[complete.cases(reasons_data$reason_for_better_productivity), ]
+
+# Calculate counts and shares for each reason, disaggregated by crop_selecting
+summary_table <- reasons_data %>%
+  group_by(crop_selecting, reason_for_better_productivity) %>%
+  summarise(count = n()) %>%
+  mutate(share = count / sum(count))
+
+# Print the summary table
+print(summary_table)
+
+```
+
+### 9. Service obtained and supported
+
+#### Small scale food producers with new or improved access to inputs and services
+
+##### Service offered
+
+```{r}
+library(dplyr)
+library(stringr)
+
+# Create a summary table for services_offered with underscore replaced by a space
+summary_table <- acting_now_mft %>%
+  mutate(services_offered = str_replace_all(services_offered, "_", " ")) %>%
+  group_by(services_offered) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+# Print the summary table
+print(summary_table)
+
+
+```
+
+##### number of people serviced
+
+```{r}
+library(dplyr)
+
+summary_table <- acting_now_mft %>%
+  summarise(
+    total_people = sum(people_serviced),
+    average_people = mean(people_serviced),
+    max_people = max(people_serviced),
+    min_people = min(people_serviced),
+    median_people = median(people_serviced),
+    sd_people = sd(people_serviced)
+  )
+
+# Print the summary table
+print(summary_table)
+
+```
+
+#### Triangulation
+
+Did you receive any services from Solidaridad or an other partner?
+
+```{r}
+#Did you receive any services?
+library(dplyr)
+
+# Create a summary table for the services variable
+summary_table <- acting_now_mft %>%
+  mutate(services = str_replace_all(services, "_", " ")) %>%
+  count(services) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  arrange(desc(n))
+
+# Print the summary table
+print(summary_table)
+
+```
+
+Type of services received
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+# Split the multiple-choice answers into separate columns
+split_services <- acting_now_mft %>%
+  select(What_services_have_you_receive) %>%
+  separate(What_services_have_you_receive, into = paste0("service_", 1:10), sep = " ", fill = "right")
+
+# Gather the columns into long format
+services_long <- split_services %>%
+  gather(key = "column", value = "service") %>%
+  filter(!is.na(service))
+
+# Count the frequency of each service
+service_counts <- services_long %>%
+  group_by(service) %>%
+  summarise(count = n()) %>%
+  mutate(service = str_replace_all(service, "_", " ")) %>%
+  arrange(desc(count))
+
+# Print the service counts
+print(service_counts)
+
+
+
+```
+
+Who did you receive it from:
+
+```{r}
+# Select columns starting with "service_input_" or "service_received_"
+service_columns <- grep("^service_(input|received)_", names(acting_now_mft), value = TRUE)
+
+# Iterate over the service columns and create frequency tables
+for (column in service_columns) {
+  frequencies <- table(acting_now_mft[[column]])
+  frequencies <- frequencies[frequencies > 1]
+  
+  if (length(frequencies) > 0) {
+    cat("##", column, "\n\n")
+    print(frequencies)
+    cat("\n\n")
+  }
+}
+
+
+
+```
+
+### 10. Knowledge and skills development
+
+This is not measured with farm level data at baseline.
+
+### 11. Support to input and service providers
+
+This is not measured with farm level data at baseline.
